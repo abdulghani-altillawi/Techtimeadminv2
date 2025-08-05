@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>إدارة الطلبات المكتملة - Tech Time</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Cairo', sans-serif; background:#222831; color:#EEEEEE; }
+    .glass { background:rgba(255,255,255,0.05); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.08); }
+    .btn { background:#00ADB5; padding:8px 16px; border-radius:8px; font-weight:bold; transition:0.3s; }
+    .btn:hover { background:#00939a; }
+    .menu-btn { padding: 0.5rem 1rem; border-radius: 0.5rem; transition:0.3s; text-align:right; display:block; }
+    .menu-btn:hover { background:#00ADB5; color:white; }
+    select, option { color:#000; }
+  </style>
+</head>
+<body class="flex min-h-screen">
+
+<!-- ✅ السايد بار -->
+<aside id="sidebar" class="glass fixed top-0 right-0 w-64 h-full p-4 lg:static lg:translate-x-0 hidden lg:block z-50 transition-transform">
+  <h2 class="text-xl font-bold mb-6 text-center">Tech Time</h2>
+  <nav class="flex flex-col gap-2">
+    <a href="admin-products.html" class="menu-btn">📦 المنتجات</a>
+    <a href="admin-categories.html" class="menu-btn">📂 الفئات</a>
+    <a href="admin-subcategories.html" class="menu-btn">🗂️ الفئات الفرعية</a>
+    <a href="admin-brands.html" class="menu-btn">🏷️ الماركات</a>
+    <a href="admin-orders.html" class="menu-btn">🛒 الطلبات المكتملة</a>
+    <a href="admin-discounts.html" class="menu-btn">💰 أكواد الخصم</a>
+    <a href="admin-contacts.html" class="menu-btn">💬 رسائل الزبائن</a>
+    <a href="#" id="logoutBtn" class="menu-btn text-red-400">🚪 تسجيل الخروج</a>
+  </nav>
+</aside>
+
+<!-- ✅ Overlay -->
+<div id="overlay" class="fixed inset-0 bg-black/50 hidden z-40"></div>
+
+<!-- ✅ المحتوى الرئيسي -->
+<div class="flex-1 flex flex-col min-h-screen">
+
+  <!-- زر ☰ للموبايل -->
+  <header class="glass flex justify-between items-center p-4 sticky top-0 lg:hidden">
+    <button class="text-2xl" onclick="toggleSidebar()">☰</button>
+    <h1 class="font-bold text-[#00ADB5]">إدارة الطلبات المكتملة</h1>
+  </header>
+
+  <!-- فلتر الحالة -->
+  <div class="p-4 flex gap-4 items-center">
+    <label>فلترة حسب الحالة:</label>
+    <select id="statusFilter" class="p-2 rounded text-black">
+      <option value="">الكل</option>
+      <option value="جديد">جديد</option>
+      <option value="قيد التحضير">قيد التحضير</option>
+      <option value="خرج إلى التوصيل">خرج إلى التوصيل</option>
+      <option value="تم التسليم">تم التسليم</option>
+      <option value="ملغى">ملغى</option>
+    </select>
+  </div>
+
+  <!-- قائمة الطلبات -->
+  <main id="ordersList" class="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <p class="col-span-full text-center text-gray-400">جاري تحميل الطلبات...</p>
+  </main>
+</div>
+
+<!-- ✅ مودال تأكيد الحذف -->
+<div id="deleteModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50">
+  <div class="glass p-6 rounded-lg w-80 text-center">
+    <h3 class="text-lg font-bold mb-4">هل أنت متأكد من حذف الطلب؟</h3>
+    <div class="flex justify-center gap-4">
+      <button id="confirmDelete" class="btn bg-red-500 hover:bg-red-600">حذف</button>
+      <button id="cancelDelete" class="btn bg-gray-500 hover:bg-gray-600">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, getDocs, deleteDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAPRUZs1HHbucnnOdqOr280TjLH86qETnA",
+  authDomain: "techtimev3.firebaseapp.com",
+  projectId: "techtimev3",
+  storageBucket: "techtimev3.appspot.com",
+  messagingSenderId: "435597436729",
+  appId: "1:435597436729:web:2bd440942a6c0da8fb6ae8",
+  measurementId: "G-3984PMGWGH"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+const ordersList = document.getElementById("ordersList");
+const deleteModal = document.getElementById("deleteModal");
+const confirmDeleteBtn = document.getElementById("confirmDelete");
+const cancelDeleteBtn = document.getElementById("cancelDelete");
+const statusFilter = document.getElementById("statusFilter");
+
+const sidebar = document.getElementById("sidebar");
+const overlay = document.getElementById("overlay");
+const logoutBtn = document.getElementById("logoutBtn");
+
+let deleteId = null;
+
+// ✅ حماية الأدمن
+onAuthStateChanged(auth, user => {
+  if (!user) {
+    window.location.href = "admin-login.html";
+  }
+});
+
+// ✅ تسجيل خروج
+logoutBtn.addEventListener("click",(e)=>{
+  e.preventDefault();
+  signOut(auth).then(()=> location.href="admin-login.html");
+});
+
+// ✅ سايد بار للموبايل
+window.toggleSidebar = function(){
+  sidebar.classList.toggle("hidden");
+  overlay.classList.toggle("hidden");
+}
+overlay.addEventListener("click", ()=>{
+  sidebar.classList.add("hidden");
+  overlay.classList.add("hidden");
+});
+
+// ✅ تحميل الطلبات مع ترتيب الأحدث أولاً
+async function loadOrders() {
+  ordersList.innerHTML = `<p class="col-span-full text-center text-gray-400">جاري التحميل...</p>`;
+  const snap = await getDocs(collection(db,"completeorders"));
+  if(snap.empty){
+    ordersList.innerHTML = `<p class="col-span-full text-center text-gray-400">لا توجد طلبات</p>`;
+    return;
+  }
+
+  // ترتيب حسب تاريخ الإنشاء
+  const ordersArray = [];
+  snap.forEach(d => ordersArray.push({id:d.id, ...d.data()}));
+  ordersArray.sort((a,b)=> {
+    const da = a.createdAt?.seconds || 0;
+    const db = b.createdAt?.seconds || 0;
+    return db - da;
+  });
+
+  ordersList.innerHTML="";
+  ordersArray.forEach(o=>{
+    const products = o.products || [];
+    const totalBeforeDiscount = products.reduce((sum,p)=> sum + (Number(p.price)||0)*(p.quantity||1),0);
+    const discount = Number(o.discount||0);
+    const totalAfter = Number(String(o.total).replace(/\D/g,''))||0;
+    const status = o.status || "جديد";
+
+    // فلترة
+    if(statusFilter.value && status !== statusFilter.value) return;
+
+    const productsHtml = products.map(p=>
+      `<li>${p.name || ''} × ${p.quantity || 1} — ${p.price || 0} ل.س</li>`
+    ).join("");
+
+    // ✅ إضافة وقت وتاريخ الطلب
+    const orderDate = o.createdAt?.seconds ? new Date(o.createdAt.seconds*1000).toLocaleString('ar-SY') : 'غير محدد';
+
+    ordersList.innerHTML += `
+      <div class="glass p-4 rounded-lg">
+        <p class="text-sm text-gray-400 mb-2">🕒 تاريخ الطلب: ${orderDate}</p>
+        <h3 class="font-bold text-lg mb-2">👤 ${o.name || 'عميل'}</h3>
+        <p class="text-sm text-gray-300">📞 ${o.phone || '-'}</p>
+        <p class="text-sm text-gray-300">📧 ${o.email || '-'}</p>
+        <p class="text-sm text-gray-300 mb-2">📍 ${o.address || '-'}</p>
+        <p class="text-sm text-gray-300 mb-2">💳 ${o.paymentMethod || 'غير محدد'}</p>
+
+        <p class="font-bold mb-1">المنتجات:</p>
+        <ul class="list-disc list-inside text-gray-200 mb-2">${productsHtml}</ul>
+
+        <p class="text-yellow-400 font-bold mb-1">الإجمالي قبل الخصم: ${totalBeforeDiscount} ل.س</p>
+        <p class="text-red-400 font-bold mb-1">قيمة الخصم: ${discount} ل.س</p>
+        <p class="text-[#00ADB5] font-bold mb-2">الإجمالي بعد الخصم: ${totalAfter} ل.س</p>
+
+        <label class="block mb-1">🔄 حالة الطلب:</label>
+        <select onchange="updateStatus('${o.id}', this.value)" class="w-full p-2 rounded text-black mb-2">
+          <option ${status=="جديد"?"selected":""}>جديد</option>
+          <option ${status=="قيد التحضير"?"selected":""}>قيد التحضير</option>
+          <option ${status=="خرج إلى التوصيل"?"selected":""}>خرج إلى التوصيل</option>
+          <option ${status=="تم التسليم"?"selected":""}>تم التسليم</option>
+          <option ${status=="ملغى"?"selected":""}>ملغى</option>
+        </select>
+
+        <div class="flex justify-end">
+          <button class="btn bg-red-500 hover:bg-red-600 px-3 py-1" onclick='showDeleteModal("${o.id}")'>🗑️ حذف</button>
+        </div>
+      </div>
+    `;
+  });
+}
+
+statusFilter.addEventListener("change", loadOrders);
+loadOrders();
+
+// ✅ تعديل حالة الطلب
+window.updateStatus = async function(id, newStatus){
+  await updateDoc(doc(db,"completeorders",id),{ status:newStatus });
+  alert("✅ تم تحديث حالة الطلب");
+}
+
+// ✅ حذف بمودال
+window.showDeleteModal = (id)=>{
+  deleteId = id;
+  deleteModal.classList.remove("hidden");
+}
+confirmDeleteBtn.addEventListener("click", async ()=>{
+  if(deleteId){
+    await deleteDoc(doc(db,"completeorders",deleteId));
+    deleteId=null;
+    deleteModal.classList.add("hidden");
+    loadOrders();
+  }
+});
+cancelDeleteBtn.addEventListener("click", ()=>{
+  deleteId=null;
+  deleteModal.classList.add("hidden");
+});
+</script>
+
+</body>
+</html>

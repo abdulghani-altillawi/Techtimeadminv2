@@ -1,0 +1,48 @@
+<!-- ✅ admin-sidebar.html -->
+
+<!-- سايد بار -->
+<aside id="sidebar" class="glass fixed top-0 right-0 w-64 h-full p-4 lg:static lg:translate-x-0 hidden lg:block z-50 transition-transform">
+  <h2 class="text-xl font-bold mb-6 text-center">Tech Time</h2>
+  <nav class="flex flex-col gap-2">
+    <a href="admin-products.html" class="menu-btn">📦 المنتجات</a>
+    <a href="admin-categories.html" class="menu-btn">📂 الفئات</a>
+    <a href="admin-subcategories.html" class="menu-btn">🗂️ الفئات الفرعية</a>
+    <a href="admin-brands.html" class="menu-btn">🏷️ الماركات</a>
+    <a href="admin-orders.html" class="menu-btn">🛒 الطلبات المكتملة</a>
+    <a href="admin-discounts.html" class="menu-btn">💰 أكواد الخصم</a>
+    <a href="admin-contacts.html" class="menu-btn">💬 رسائل الزبائن</a>
+    <a href="admin.html" id="logoutBtn" class="menu-btn text-red-400">🚪 تسجيل الخروج</a>
+  </nav>
+</aside>
+
+<!-- ✅ Overlay -->
+<div id="overlay" class="fixed inset-0 bg-black/50 hidden z-40"></div>
+
+<script type="module">
+  import { getAuth, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  const auth = getAuth();
+
+  // ✅ دالة عالمية لفتح/إغلاق السايد بار
+  window.toggleSidebar = function(){
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+    sidebar.classList.toggle('hidden');
+    overlay.classList.toggle('hidden');
+  }
+
+  // ✅ إغلاق عند الضغط على الـ Overlay
+  document.addEventListener("click", (e)=>{
+    if(e.target.id === "overlay"){
+      document.getElementById('sidebar').classList.add('hidden');
+      document.getElementById('overlay').classList.add('hidden');
+    }
+  });
+
+  // ✅ تسجيل الخروج
+  document.addEventListener("click", (e)=>{
+    if(e.target.id === "logoutBtn"){
+      e.preventDefault();
+      signOut(auth).then(()=> location.href="admin.html");
+    }
+  });
+</script>

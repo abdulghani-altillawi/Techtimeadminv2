@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>إدارة الماركات - Tech Time</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Cairo', sans-serif; background:#222831; color:#EEEEEE; }
+    .glass { background:rgba(255,255,255,0.05); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.08); }
+    .btn { background:#00ADB5; padding:8px 16px; border-radius:8px; font-weight:bold; transition:0.3s; }
+    .btn:hover { background:#00939a; }
+    .input { width:100%; padding:8px; margin-bottom:8px; border-radius:6px; background:#fff; color:#000; }
+    .menu-btn { padding: 0.5rem 1rem; border-radius: 0.5rem; transition:0.3s; text-align:right; display:block; }
+    .menu-btn:hover { background:#00ADB5; color:white; }
+  </style>
+</head>
+<body class="flex min-h-screen">
+
+<!-- ✅ السايد بار -->
+<aside id="sidebar" class="glass fixed top-0 right-0 w-64 h-full p-4 lg:static lg:translate-x-0 hidden lg:block z-50 transition-transform">
+  <h2 class="text-xl font-bold mb-6 text-center">Tech Time</h2>
+  <nav class="flex flex-col gap-2">
+    <a href="admin-products.html" class="menu-btn">📦 المنتجات</a>
+    <a href="admin-categories.html" class="menu-btn">📂 الفئات</a>
+    <a href="admin-subcategories.html" class="menu-btn">🗂️ الفئات الفرعية</a>
+    <a href="admin-brands.html" class="menu-btn">🏷️ الماركات</a>
+    <a href="admin-orders.html" class="menu-btn">🛒 الطلبات المكتملة</a>
+    <a href="admin-discounts.html" class="menu-btn">💰 أكواد الخصم</a>
+    <a href="admin-contacts.html" class="menu-btn">💬 رسائل الزبائن</a>
+    <a href="#" id="logoutBtn" class="menu-btn text-red-400">🚪 تسجيل الخروج</a>
+  </nav>
+</aside>
+
+<!-- ✅ Overlay -->
+<div id="overlay" class="fixed inset-0 bg-black/50 hidden z-40"></div>
+
+<!-- ✅ المحتوى الرئيسي -->
+<div class="flex-1 flex flex-col min-h-screen">
+
+  <!-- زر ☰ للموبايل -->
+  <header class="glass flex justify-between items-center p-4 sticky top-0 lg:hidden">
+    <button class="text-2xl" onclick="toggleSidebar()">☰</button>
+    <h1 class="font-bold text-[#00ADB5]">إدارة الماركات</h1>
+  </header>
+
+  <!-- زر إضافة ماركة -->
+  <div class="p-4 text-left">
+    <button id="addBrandBtn" class="btn">➕ إضافة ماركة جديدة</button>
+  </div>
+
+  <!-- قائمة الماركات -->
+  <main id="brandsList" class="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <p class="col-span-full text-center text-gray-400">جاري تحميل الماركات...</p>
+  </main>
+</div>
+
+<!-- ✅ مودال إضافة/تعديل ماركة -->
+<div id="brandModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50">
+  <div class="glass p-6 rounded-lg w-96 max-h-[90vh] overflow-auto text-center">
+    <h2 id="brandModalTitle" class="text-xl mb-4">إضافة ماركة جديدة</h2>
+    <input id="brandName" placeholder="اسم الماركة" class="input">
+    <input id="brandImage" placeholder="رابط صورة الماركة" class="input">
+    <button id="saveBrand" class="btn w-full mt-2">💾 حفظ</button>
+    <button onclick="closeBrandModal()" class="btn w-full mt-2 bg-red-500 hover:bg-red-600">إلغاء</button>
+  </div>
+</div>
+
+<!-- ✅ مودال تأكيد الحذف -->
+<div id="deleteModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50">
+  <div class="glass p-6 rounded-lg w-80 text-center">
+    <h3 class="text-lg font-bold mb-4">هل أنت متأكد من الحذف؟</h3>
+    <div class="flex justify-center gap-4">
+      <button id="confirmDelete" class="btn bg-red-500 hover:bg-red-600">حذف</button>
+      <button id="cancelDelete" class="btn bg-gray-500 hover:bg-gray-600">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAPRUZs1HHbucnnOdqOr280TjLH86qETnA",
+    authDomain: "techtimev3.firebaseapp.com",
+    projectId: "techtimev3",
+    storageBucket: "techtimev3.appspot.com",
+    messagingSenderId: "435597436729",
+    appId: "1:435597436729:web:2bd440942a6c0da8fb6ae8",
+    measurementId: "G-3984PMGWGH"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  // ✅ حماية الأدمن
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      window.location.href = "admin-login.html";
+      return;
+    }
+
+    const adminRef = doc(db, "admin", user.uid);
+    const adminSnap = await getDoc(adminRef);
+
+    if (!adminSnap.exists()) {
+      alert("❌ ليس لديك صلاحية لدخول لوحة التحكم");
+      await signOut(auth);
+      window.location.href = "https://www.facebook.com"; // 😂😂 يروح على فيسبوك
+    }
+  });
+
+  const brandsList = document.getElementById("brandsList");
+  const addBrandBtn = document.getElementById("addBrandBtn");
+  const brandModal = document.getElementById("brandModal");
+  const brandModalTitle = document.getElementById("brandModalTitle");
+  const saveBrandBtn = document.getElementById("saveBrand");
+  const deleteModal = document.getElementById("deleteModal");
+  const brandName = document.getElementById("brandName");
+  const brandImage = document.getElementById("brandImage");
+  const confirmDeleteBtn = document.getElementById("confirmDelete");
+  const cancelDeleteBtn = document.getElementById("cancelDelete");
+
+  const sidebar = document.getElementById("sidebar");
+  const overlay = document.getElementById("overlay");
+  const logoutBtn = document.getElementById("logoutBtn");
+
+  let editBrandId = null;
+  let deleteId = null;
+
+  // ✅ تسجيل خروج
+  logoutBtn.addEventListener("click",(e)=>{
+    e.preventDefault();
+    signOut(auth).then(()=> location.href="admin.html");
+  });
+
+  // ✅ سايد بار للموبايل
+  window.toggleSidebar = function(){
+    sidebar.classList.toggle("hidden");
+    overlay.classList.toggle("hidden");
+  }
+  overlay.addEventListener("click", ()=>{
+    sidebar.classList.add("hidden");
+    overlay.classList.add("hidden");
+  });
+
+  // ✅ فتح وإغلاق مودال الماركة
+  addBrandBtn.addEventListener("click", ()=> openBrandModal());
+  function openBrandModal(brand=null){
+    brandModal.classList.remove("hidden");
+    brandModalTitle.textContent = brand ? "تعديل الماركة" : "إضافة ماركة جديدة";
+    editBrandId = brand?.id || null;
+    brandName.value = brand?.name || "";
+    brandImage.value = brand?.image || "";
+  }
+  window.closeBrandModal = ()=> brandModal.classList.add("hidden");
+
+  // ✅ تحميل الماركات
+  async function loadBrands(){
+    brandsList.innerHTML = `<p class="col-span-full text-center text-gray-400">جاري التحميل...</p>`;
+    const snap = await getDocs(collection(db,"brands"));
+    if(snap.empty){
+      brandsList.innerHTML = `<p class="col-span-full text-center text-gray-400">لا توجد ماركات</p>`;
+      return;
+    }
+    brandsList.innerHTML="";
+    snap.forEach(d=>{
+      const b = {id:d.id, ...d.data()};
+      brandsList.innerHTML += `
+        <div class="glass p-4 rounded-lg text-center">
+          <img src="${b.image || ''}" class="w-full h-40 object-cover rounded mb-2">
+          <h3 class="font-bold">${b.name || ''}</h3>
+          <div class="flex justify-center gap-2 mt-2">
+            <button class="btn px-3 py-1" onclick='editBrand(${JSON.stringify(b)})'>✏️ تعديل</button>
+            <button class="btn bg-red-500 hover:bg-red-600 px-3 py-1" onclick='showDeleteModal("${b.id}")'>🗑️ حذف</button>
+          </div>
+        </div>
+      `;
+    });
+  }
+  loadBrands();
+
+  // ✅ حفظ الماركة
+  saveBrandBtn.addEventListener("click", async ()=>{
+    const name = brandName.value;
+    const image = brandImage.value;
+    if(!name || !image){ alert("يرجى إدخال الاسم والصورة"); return; }
+
+    const brandData = { name, image };
+    if(editBrandId){
+      await updateDoc(doc(db,"brands",editBrandId), brandData);
+      alert("✅ تم تعديل الماركة");
+    } else {
+      await addDoc(collection(db,"brands"), brandData);
+      alert("✅ تم إضافة الماركة");
+    }
+    closeBrandModal(); loadBrands();
+  });
+
+  // ✅ تعديل الماركة
+  window.editBrand = (brand)=> openBrandModal(brand);
+
+  // ✅ حذف بمودال
+  window.showDeleteModal = (id)=>{
+    deleteId = id;
+    deleteModal.classList.remove("hidden");
+  }
+  confirmDeleteBtn.addEventListener("click", async ()=>{
+    if(deleteId){
+      await deleteDoc(doc(db,"brands",deleteId));
+      deleteId=null;
+      deleteModal.classList.add("hidden");
+      loadBrands();
+    }
+  });
+  cancelDeleteBtn.addEventListener("click", ()=>{
+    deleteId=null;
+    deleteModal.classList.add("hidden");
+  });
+</script>
+
+</body>
+</html>
